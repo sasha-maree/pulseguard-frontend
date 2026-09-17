@@ -5,7 +5,6 @@ import { Monitor, Heartbeat } from "../types";
 import {
   Activity,
   ShieldCheck,
-  AlertTriangle,
   CheckCircle2,
   XCircle,
   Plus,
@@ -31,6 +30,7 @@ export default function Dashboard() {
   const [heartbeats, setHeartbeats] = useState<Heartbeat[]>([]);
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form State
@@ -40,10 +40,10 @@ export default function Dashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // 1. Fetch all monitors
+  // 1. Fetch all monitors (bypassing browser cache)
   const fetchMonitors = async () => {
     try {
-      const res = await fetch(API_BASE);
+      const res = await fetch(API_BASE, { cache: "no-store" });
       const json = await res.json();
       if (json.success) {
         setMonitors(json.data);
@@ -58,11 +58,13 @@ export default function Dashboard() {
     }
   };
 
-  // 2. Fetch heartbeats for selected monitor
+  // 2. Fetch heartbeats for selected monitor (bypassing browser cache)
   const fetchHeartbeats = async (monitorId: string) => {
     setChartLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/${monitorId}/heartbeats`);
+      const res = await fetch(`${API_BASE}/${monitorId}/heartbeats`, {
+        cache: "no-store",
+      });
       const json = await res.json();
       if (json.success) {
         setHeartbeats(json.data);
@@ -74,6 +76,16 @@ export default function Dashboard() {
     }
   };
 
+  // 3. Combined Refresh function for the button
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchMonitors();
+    if (selectedMonitor) {
+      await fetchHeartbeats(selectedMonitor.id);
+    }
+    setTimeout(() => setIsRefreshing(false), 500); // smooth spin animation
+  };
+
   // Initial load & 10s auto-refresh
   useEffect(() => {
     fetchMonitors();
@@ -81,14 +93,14 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch chart when selected monitor changes
+  // Fetch chart whenever selected monitor changes
   useEffect(() => {
     if (selectedMonitor) {
       fetchHeartbeats(selectedMonitor.id);
     }
   }, [selectedMonitor?.id]);
 
-  // 3. Handle Add Monitor
+  // 4. Handle Add Monitor
   const handleCreateMonitor = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
@@ -118,7 +130,7 @@ export default function Dashboard() {
     }
   };
 
-  // 4. Handle Delete Monitor
+  // 5. Handle Delete Monitor
   const handleDeleteMonitor = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm("Are you sure you want to delete this monitor?")) return;
@@ -182,11 +194,12 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-3">
               <button
-                  onClick={fetchMonitors}
-                  className="p-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-200 transition"
-                  title="Refresh"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="p-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-200 transition disabled:opacity-50"
+                  title="Refresh All Data"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin text-emerald-400" : ""}`} />
               </button>
               <button
                   onClick={() => setIsModalOpen(true)}
